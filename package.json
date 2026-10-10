@@ -1,0 +1,18 @@
+{
+  "name": "upliftment-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Community Upliftment & Impact Monitoring System — Tijaarat Raabehah and Qardan Hasana (website, admin panel, family app, API)",
+  "scripts": {
+    "install-all": "npm install --prefix server && npm install --prefix client",
+    "build": "npm install --prefix server && npm install --prefix client --include=dev && npm run build --prefix client",
+    "start": "npm start --prefix server",
+    "seed": "npm run seed --prefix server",
+    "seed:reset": "npm run seed --prefix server -- --reset",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -19,7 +19,7 @@ function evaluateCase(c, now = new Date()) {
   const diverted = (c.utilizations || []).filter((u) => u.approvedPurpose === false);
   const updates = [...(c.monthlyUpdates || [])].sort((a, b) => (a.month < b.month ? -1 : 1));
   const last = updates[updates.length - 1];
-  const isBusiness = BUSINESS_SCHEMES.includes(c.scheme);
+  const isBusiness = c.caseType ? c.caseType === 'business' && BUSINESS_SCHEMES.includes(c.scheme) : BUSINESS_SCHEMES.includes(c.scheme);
 
   // ---- Manual alerts raised by the committee
   (c.alerts || [])
@@ -28,7 +28,8 @@ function evaluateCase(c, now = new Date()) {
 
   // ---- HIGH priority rules
   if (diverted.length) high.push(`Funds used for unapproved purpose (${diverted.length} entr${diverted.length > 1 ? 'ies' : 'y'})`);
-  if (last && last.businessOperating === false) high.push('Business reported closed / not operating');
+  if (isBusiness && last && last.businessOperating === false) high.push('Business reported closed / not operating');
+  if (c.caseType === 'education' && c.education?.studyStatus === 'dropped') high.push('Student has dropped out of studies');
   const overdue = overdueInstallments(c, now);
   const seriousOverdue = overdue.filter((r) => daysBetween(r.dueDate, now) > 60);
   if (seriousOverdue.length >= 2) high.push(`${seriousOverdue.length} installments overdue more than 60 days`);
@@ -60,6 +61,9 @@ function evaluateCase(c, now = new Date()) {
     const lastDate = last ? new Date(`${last.month}-28`) : firstDisb;
     if (lastDate && daysBetween(lastDate, now) > 45) medium.push('No monthly progress update in over 45 days');
   }
+  if (last && last.educationContinuing === false && c.caseType === 'education') medium.push('Education reported as not continuing');
+  if (c.caseType === 'housing' && firstDisb && daysBetween(firstDisb, now) > 120 && c.housing?.completionStatus !== 'completed')
+    medium.push('Housing work not confirmed complete 4 months after disbursement');
   const trainingNotApplied = (c.trainings || []).filter((t) => t.status === 'completed' && !t.applied);
   if (trainingNotApplied.length && c.scheme === 'TR') medium.push('Training completed but not being applied');
   const missedTraining = (c.trainings || []).filter((t) => t.status === 'planned' && t.plannedDate && daysBetween(t.plannedDate, now) > 30);

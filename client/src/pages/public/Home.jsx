@@ -1,136 +1,130 @@
 import { Link } from 'react-router-dom';
-import { api } from '../../api';
-import { useLoad } from '../../ui';
-import { num } from '../../lib';
 
-const QUESTIONS = [
-  'Who needs support?',
-  'What kind of support will make a genuine difference?',
-  'Was the support delivered and used properly?',
-  'Is the family’s situation actually better?',
-  'What is needed next to reach lasting self-reliance?',
+const AREAS = [
+  {
+    key: 'housing',
+    title: 'Housing',
+    text: 'A safe and dignified home: help with repairs, construction, purchase or a rent deposit when a family is in need.',
+    icon: (
+      <svg viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M8 22 24 9l16 13" />
+        <path d="M12 19v20h24V19" />
+        <path d="M20 39V28h8v11" />
+      </svg>
+    ),
+  },
+  {
+    key: 'education',
+    title: 'Education',
+    text: 'Keeping children and young people in school, college and skill courses, with support for fees and guidance.',
+    icon: (
+      <svg viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M4 18 24 9l20 9-20 9z" />
+        <path d="M12 22v9c0 3 5 6 12 6s12-3 12-6v-9" />
+        <path d="M44 18v11" />
+      </svg>
+    ),
+  },
+  {
+    key: 'business',
+    title: 'Business',
+    text: 'Growing a livelihood: counselling, mentoring and interest-free support to start, run or expand a business.',
+    icon: (
+      <svg viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M6 18h36v22H6z" />
+        <path d="M17 18v-5a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v5" />
+        <path d="M6 27h36" />
+        <path d="M22 27v4h4v-4" />
+      </svg>
+    ),
+  },
 ];
 
-const MEASURES = [
-  { name: 'Sanctioned', text: 'What the review committee approved, and why.' },
-  { name: 'Disbursed', text: 'What actually reached the family, tranche by tranche.' },
-  { name: 'Properly used', text: 'What was verified against invoices, stock and site visits.' },
-  { name: 'Outcome', text: 'Income, jobs and stability compared with the baseline.' },
-];
-
-const LEVELS = [
-  { who: 'HQ / scheme authority', does: 'Policy, budgets, sanction guidelines and the consolidated impact review.' },
-  { who: 'Zonal Business Council', does: 'Case scrutiny, sanction decisions, the mentoring network and quarterly performance review.' },
-  { who: 'Mauze committee', does: 'Household survey, field verification, counselling and monthly follow-up.' },
-  { who: 'The family', does: 'Agreed goals, proper use of funds, simple records and a monthly progress update from the app.' },
+const STEPS = [
+  ['Reach out', 'Fill in the request form, or ask your Mauze committee to send you the family form on WhatsApp.'],
+  ['Meet your counsellor', 'A committee member visits your home to understand your family’s situation and needs.'],
+  ['Agree a plan', 'Together you decide the support that will make a real difference, with a clear goal.'],
+  ['Walk together', 'Your counsellor stays in touch until your family is stable and self-reliant.'],
 ];
 
 export default function Home() {
-  const stats = useLoad(() => api('/public/stats'), []);
-  const s = stats.data;
   return (
     <>
-      <section className="hero">
-        <div className="pub-wrap hero-grid">
-          <div className="hero-copy">
-            <h1>Every family, followed from first conversation to lasting change.</h1>
+      <section className="hero2">
+        <div className="pub-wrap hero2-grid">
+          <div className="hero2-copy">
+            <p className="hero2-ar" lang="ar" dir="rtl">
+              رفع مستوى معيشة المؤمنين
+            </p>
+            <h1>Raising the standard of living of every Mumin family</h1>
             <p className="lede">
-              A shared register for Mauze committees in villages and small towns. It records each family’s needs, the support agreed, how funds were used, and whether life
-              actually improved, so Tijaarat Raabehah and Qardan Hasana are measured by stable families, not by amounts distributed.
+              The Upliftment Department works through your Mauze committee to help families with their home, their children’s education and their livelihood, with
+              care, respect and confidentiality.
             </p>
             <div className="hero-actions">
               <Link className="btn lg" to="/request-support">
-                Request support for your family
+                Request support
               </Link>
-              <Link className="btn ghost lg" to="/framework">
-                See how cases are reviewed
-              </Link>
+              <a className="btn ghost lg" href="#steps">
+                How it works
+              </a>
             </div>
-            {s && (
-              <dl className="hero-facts">
-                <div>
-                  <dt>Mauzes on the register</dt>
-                  <dd>{num(s.mauzes)}</dd>
-                </div>
-                <div>
-                  <dt>Households assessed</dt>
-                  <dd>{num(s.households)}</dd>
-                </div>
-                <div>
-                  <dt>Families with a plan</dt>
-                  <dd>{num(s.cases)}</dd>
-                </div>
-              </dl>
-            )}
           </div>
-          <figure className="arch" aria-label="The five questions answered for every beneficiary">
-            <figcaption>Asked of every case</figcaption>
-            <ol>
-              {QUESTIONS.map((q) => (
-                <li key={q}>{q}</li>
-              ))}
-            </ol>
-          </figure>
+          <div className="hero2-logo">
+            <img src="/brand/logo-blue.png" alt="Upliftment Department logo" />
+          </div>
         </div>
       </section>
 
-      <section className="pub-section">
+      <section className="pub-section" id="areas">
         <div className="pub-wrap">
-          <h2>Four numbers that are never added together</h2>
-          <p className="section-lede">Approving support, paying it, using it well and improving a family’s life are four different things. Each case keeps them apart.</p>
-          <div className="ledger">
-            {MEASURES.map((m, i) => (
-              <div className="ledger-col" key={m.name}>
-                <span className="ledger-step">{i + 1}</span>
-                <h3>{m.name}</h3>
-                <p>{m.text}</p>
-              </div>
+          <h2 className="center">What we help with</h2>
+          <div className="areas">
+            {AREAS.map((a) => (
+              <article key={a.key} className={`area area-${a.key}`}>
+                {a.icon}
+                <h3>{a.title}</h3>
+                <p>{a.text}</p>
+              </article>
             ))}
           </div>
-          <p className="note">A family repaying on time whose income has not improved is not counted as a success. Its plan is revised instead.</p>
         </div>
       </section>
 
-      <section className="pub-section alt">
-        <div className="pub-wrap two-col">
-          <div>
-            <h2>Clear responsibility at every level</h2>
-            <p className="section-lede">Every family has a named counsellor, and every case is reviewed independently at the next level. The register supports existing HQ controls; it does not bypass them.</p>
-          </div>
-          <ul className="levels">
-            {LEVELS.map((l) => (
-              <li key={l.who}>
-                <strong>{l.who}</strong>
-                <span>{l.does}</span>
+      <section className="pub-section alt" id="steps">
+        <div className="pub-wrap">
+          <h2 className="center">How to get help</h2>
+          <ol className="steps">
+            {STEPS.map(([t, d]) => (
+              <li key={t}>
+                <h3>{t}</h3>
+                <p>{d}</p>
               </li>
             ))}
-          </ul>
+          </ol>
         </div>
       </section>
 
       <section className="pub-section">
-        <div className="pub-wrap two-col">
+        <div className="pub-wrap promise">
+          <img src="/brand/logo-red.png" alt="" aria-hidden="true" />
           <div>
-            <h2>Built for small towns</h2>
+            <h2>With dignity, in confidence</h2>
             <p className="section-lede">
-              Each Mauze chooses a few priority sectors from local demand and skills, rather than steering everyone into the same business.
+              Whatever you share stays with the people helping your family. Support is given with izzat and kept private, as a brother helps a brother.
             </p>
+            <Link className="btn" to="/request-support">
+              Request support for your family
+            </Link>
           </div>
-          <ul className="plain-list">
-            <li>Home and micro businesses: tailoring, food production, repairs and small trading</li>
-            <li>Youth: digital skills, apprenticeships, job placement and first ventures</li>
-            <li>Women entrepreneurs: home-based ventures, market access and suitable training</li>
-            <li>Existing shops: accounts, stock control, GST and Udyam, digital payments</li>
-            <li>Market links to nearby towns, larger businesses, exhibitions and online sales</li>
-          </ul>
         </div>
       </section>
 
       <section className="pub-cta">
         <div className="pub-wrap cta-row">
           <div>
-            <h2>Already receiving support?</h2>
-            <p>Log in to the family app to see your plan, upcoming installments and trainings, and send your monthly update to your counsellor.</p>
+            <h2>Already being helped?</h2>
+            <p>Open the family app to see your plan, installments and trainings, and to send your monthly update to your counsellor.</p>
           </div>
           <Link className="btn lg light" to="/login">
             Open the family app

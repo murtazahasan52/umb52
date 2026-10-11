@@ -1,5 +1,6 @@
 const { Schema, model } = require('mongoose');
 const { HOUSEHOLD_CATEGORIES } = require('../config/constants');
+const DocumentSchema = require('./DocumentSchema');
 
 // Checkpoint 1 — confidential household & livelihood survey
 const MemberSchema = new Schema(
@@ -17,6 +18,7 @@ const MemberSchema = new Schema(
   },
   { _id: false }
 );
+
 
 const HouseholdSchema = new Schema(
   {
@@ -82,10 +84,14 @@ const HouseholdSchema = new Schema(
     assessedAt: Date,
     assessedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     confidentialNotes: String, // visible to staff only
+    documents: [DocumentSchema],
+    importedAt: Date,
   },
   { timestamps: true }
 );
 
 HouseholdSchema.index({ mauze: 1, headName: 1 });
+HouseholdSchema.index({ itsNo: 1 });
+HouseholdSchema.index({ mobile: 1 });
 
 module.exports = model('Household', HouseholdSchema);

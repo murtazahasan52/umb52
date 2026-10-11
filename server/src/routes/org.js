@@ -68,6 +68,37 @@ router.get(
   })
 );
 
+// Typed Mauze / Zone while creating records: returns the existing Mauze, or creates it when allowed
+// HQ: may create both Mauze and Zone. ZBC: may create a Mauze in its own zone. Others: their own Mauze only.
+router.post(
+  '/mauzes/resolve',
+  ah(async (req, res) => {
+    const name = String(req.body.mauzeName || '').trim();
+    const zoneName = String(req.body.zoneName || '').trim();
+    if (!name) return res.status(400).json({ message: 'Type the Mauze name' });
+    const exact = (s) => new RegExp(`^${s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+    const scope = req.user.role === ROLES.HQ ? {} : req.user.role === ROLES.ZBC ? { zone: req.user.zone } : { _id: req.user.mauze };
+    let m = await Mauze.findOne({ ...scope, $or: [{ name: exact(name) }, { code: exact(name) }] }).populate('zone', 'name');
+    if (m) return res.json({ mauze: m, created: false });
+    if (![ROLES.HQ, ROLES.ZBC].includes(req.user.role)) return res.status(403).json({ message: `Mauze "${name}" is not yours. Records can only be added to your own Mauze.` });
+
+    let zone;
+    if (req.user.role === ROLES.ZBC) zone = await Zone.findById(req.user.zone);
+    else {
+      if (!zoneName) return res.status(400).json({ message: `"${name}" is a new Mauze. Type its Zone too.` });
+      zone = await Zone.findOne({ $or: [{ name: exact(zoneName) }, { code: exact(zoneName) }] });
+      if (!zone) {
+        zone = await Zone.create({ name: zoneName });
+        audit(req, 'create', 'Zone', zone._id, zone.name);
+      }
+    }
+    m = await Mauze.create({ name, zone: zone._id, totalHouseholds: Number(req.body.totalHouseholds) || 0 });
+    audit(req, 'create', 'Mauze', m._id, `${m.name} (${zone.name})`);
+    m = await m.populate('zone', 'name');
+    res.status(201).json({ mauze: m, created: true });
+  })
+);
+
 router.post(
   '/mauzes',
   allow(ROLES.HQ, ROLES.ZBC),

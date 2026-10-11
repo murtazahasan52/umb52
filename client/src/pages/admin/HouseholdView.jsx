@@ -1,4 +1,9 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { UploadBox, DocumentList } from '../../components/Documents';
+import { TypeBadge } from '../../components/TypeDetails';
+import { SendFormModal, ShareLink } from './Forms';
+import { uploadAndAttach } from './CaseDocs';
 import { api } from '../../api';
 import { useLoad, Loading, ErrorBox, RiskBadge, StageBadge, FinalBadge } from '../../ui';
 import { CATEGORIES, NEED, SCHEMES, inr, date, num } from '../../lib';
@@ -6,6 +11,8 @@ import { CATEGORIES, NEED, SCHEMES, inr, date, num } from '../../lib';
 export default function HouseholdView() {
   const { id } = useParams();
   const d = useLoad(() => api(`/households/${id}`), [id]);
+  const [sendOpen, setSendOpen] = useState(false);
+  const [share, setShare] = useState(null);
   if (d.loading) return <Loading />;
   if (d.error) return <ErrorBox error={d.error} onRetry={d.reload} />;
   const { household: h, cases } = d.data;
@@ -23,6 +30,9 @@ export default function HouseholdView() {
           </p>
         </div>
         <div className="head-actions">
+          <button className="btn ghost" onClick={() => setSendOpen(true)}>
+            Send update form
+          </button>
           <Link className="btn ghost" to={`/admin/households/${h._id}/edit`}>
             Edit survey
           </Link>
@@ -159,6 +169,26 @@ export default function HouseholdView() {
       )}
 
       <section className="panel">
+        <h2>Forms and documents</h2>
+        <UploadBox
+          onUpload={async (files, meta) => {
+            await uploadAndAttach(files, meta, `/households/${h._id}/documents`);
+            d.reload();
+          }}
+        />
+        <DocumentList
+          docs={h.documents}
+          onDelete={async (doc) => {
+            await api(`/households/${h._id}/documents/${doc._id}`, { method: 'DELETE' });
+            d.reload();
+          }}
+        />
+      </section>
+
+      {sendOpen && <SendFormModal household={h} onClose={() => setSendOpen(false)} onCreated={(f) => setShare({ ...f, mauze: h.mauze?.name })} />}
+      {share && <ShareLink form={share} onClose={() => setShare(null)} />}
+
+      <section className="panel">
         <h2>Cases for this family</h2>
         {cases.length === 0 ? (
           <p className="muted">
@@ -170,6 +200,7 @@ export default function HouseholdView() {
               <thead>
                 <tr>
                   <th>Case</th>
+                  <th>Type</th>
                   <th>Scheme</th>
                   <th>Stage</th>
                   <th>Status</th>
@@ -183,6 +214,9 @@ export default function HouseholdView() {
                   <tr key={c._id}>
                     <td>
                       <Link to={`/admin/cases/${c._id}`}>{c.caseNo}</Link>
+                    </td>
+                    <td>
+                      <TypeBadge type={c.caseType} />
                     </td>
                     <td>{SCHEMES[c.scheme]}</td>
                     <td>

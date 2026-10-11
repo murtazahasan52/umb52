@@ -1,6 +1,6 @@
 // Minimal service worker: app shell offline, never caches API data (it is confidential)
-const CACHE = 'upliftment-shell-v1';
-const SHELL = ['/', '/app', '/manifest.webmanifest', '/icon.svg'];
+const CACHE = 'upliftment-shell-v2';
+const SHELL = ['/', '/app', '/manifest.webmanifest', '/icon-192.png', '/brand/logo-blue.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

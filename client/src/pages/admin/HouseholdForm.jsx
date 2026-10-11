@@ -4,6 +4,7 @@ import { api } from '../../api';
 import { useAuth } from '../../auth';
 import { Field, Chips, useLoad, Loading, useToast } from '../../ui';
 import { CATEGORIES, NEED } from '../../lib';
+import MauzeInput, { resolveMauze } from '../../components/MauzeInput';
 
 const blankMember = { name: '', relation: '', age: '', gender: '', occupation: '', earning: false, monthlyIncome: '', education: '', studying: false };
 
@@ -12,17 +13,20 @@ export default function HouseholdForm() {
   const { user } = useAuth();
   const nav = useNavigate();
   const toast = useToast();
-  const mauzes = useLoad(() => api('/org/mauzes'), []);
   const [form, setForm] = useState(id ? null : { categories: [], members: [], business: { exists: false }, debts: {}, assessed: true, mauze: user.mauze?._id || user.mauze });
+  const [place, setPlace] = useState({ mauzeName: '', zoneName: '' });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
   useEffect(() => {
-    if (id) api(`/households/${id}`).then((r) => setForm({ ...r.household, mauze: r.household.mauze?._id, assessed: !!r.household.assessedAt }));
+    if (id)
+      api(`/households/${id}`).then((r) => {
+        setForm({ ...r.household, mauze: r.household.mauze?._id, assessed: !!r.household.assessedAt });
+        setPlace({ mauzeName: r.household.mauze?.name || '', zoneName: '' });
+      });
   }, [id]);
 
   if (!form) return <Loading />;
-  const mopts = Object.fromEntries((mauzes.data || []).map((m) => [m._id, m.name]));
   const members = form.members || [];
   const setMember = (i, k, v) => setForm((f) => ({ ...f, members: f.members.map((m, j) => (j === i ? { ...m, [k]: v } : m)) }));
 
@@ -31,7 +35,7 @@ export default function HouseholdForm() {
     setBusy(true);
     setErr('');
     try {
-      const body = { ...form };
+      const body = { ...form, mauze: await resolveMauze(user, place) };
       const r = id ? await api(`/households/${id}`, { method: 'PUT', body }) : await api('/households', { method: 'POST', body });
       toast(id ? 'Household updated' : `Household ${r.code} added`);
       nav(`/admin/households/${r._id}`);
@@ -58,7 +62,7 @@ export default function HouseholdForm() {
             <Field label="Head of family" name="headName" required {...P} />
             <Field label="ITS number" name="itsNo" {...P} />
             <Field label="Mobile" name="mobile" type="tel" {...P} />
-            {['hq', 'zbc'].includes(user.role) && <Field label="Mauze" name="mauze" type="select" options={mopts} required {...P} />}
+            <MauzeInput value={place} onChange={setPlace} />
             <Field label="Address" name="address" span={2} {...P} />
             <Chips label="Who is this family?" name="categories" options={CATEGORIES} {...P} hint="Select all that apply" />
           </div>

@@ -11,6 +11,8 @@ const Case = require('./models/Case');
 const Grievance = require('./models/Grievance');
 const Enquiry = require('./models/Enquiry');
 const AuditLog = require('./models/AuditLog');
+const FormRequest = require('./models/FormRequest');
+const { Foster, Professional, OfficeContact } = require('./models/Directory');
 const { Counter } = require('./models/Counter');
 const { refreshRisk } = require('./utils/warnings');
 const { monthKey } = require('./utils/helpers');
@@ -40,7 +42,7 @@ const BIZ = [
 async function run() {
   await connectDB(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/upliftment_monitor');
   if (process.argv.includes('--reset')) {
-    await Promise.all([Zone, Mauze, User, Household, Case, Grievance, Enquiry, AuditLog, Counter].map((M) => M.deleteMany({})));
+    await Promise.all([Zone, Mauze, User, Household, Case, Grievance, Enquiry, AuditLog, Counter, FormRequest, Foster, Professional, OfficeContact].map((M) => M.deleteMany({})));
     console.log('Database cleared');
   }
 
@@ -146,21 +148,29 @@ async function run() {
     { scheme: 'WELFARE', kind: 'welfare' },
     { scheme: 'QH', kind: 'achieved' },
     { scheme: 'TR', kind: 'identified' },
+    { scheme: 'QH', kind: 'housing_repair', type: 'housing' },
+    { scheme: 'WELFARE', kind: 'housing_deposit', type: 'housing' },
+    { scheme: 'WELFARE', kind: 'education_fees', type: 'education' },
   ];
+  const TYPE_OF = { skill: 'education', welfare: 'education' };
+  const PREFIX = { housing: 'HSG', education: 'EDU', business: 'BUS' };
   const caseSeq = {};
   const bizHH = createdHH.filter((h) => h.business?.exists && h.assessedAt);
   const otherHH = createdHH.filter((h) => !h.business?.exists && h.assessedAt);
   let made = 0;
   let firstCase;
   for (const [i, s] of scenarios.entries()) {
-    const pool = ['SKILL', 'WELFARE'].includes(s.scheme) ? otherHH : bizHH;
+    const caseType = s.type || TYPE_OF[s.kind] || 'business';
+    const pool = caseType === 'business' ? bizHH : otherHH;
     const h = pool[(i * 7) % pool.length];
     const [cou, men] = counsellors[h.mauze];
-    caseSeq[s.scheme] = (caseSeq[s.scheme] || 0) + 1;
+    caseSeq[caseType] = (caseSeq[caseType] || 0) + 1;
     const amt = R(5, 30) * 10000;
     const base = { monthlySales: h.business?.monthlyTurnover || 0, netProfit: h.business?.monthlyNetIncome || 0, householdIncome: h.monthlyHouseholdIncome, employees: R(0, 3), debts: h.debts?.total, recordedAt: monthsAgo(9) };
     const c = new Case({
-      caseNo: `${s.scheme}-${String(new Date().getFullYear()).slice(-2)}-${String(caseSeq[s.scheme]).padStart(4, '0')}`,
+      caseNo: `${PREFIX[caseType]}-${String(new Date().getFullYear()).slice(-2)}-${String(caseSeq[caseType]).padStart(4, '0')}`,
+      caseType,
+      businessDetail: caseType === 'business' ? { businessName: h.business?.name, businessType: h.business?.type, purpose: s.scheme === 'TR' ? 'formalization' : 'working_capital' } : undefined,
       household: h._id,
       mauze: h.mauze,
       zone: h.zone,
@@ -376,12 +386,48 @@ async function run() {
         training('Mentorship — retail layout', 'mentorship', 'planned', false);
         c.trainings[0].plannedDate = new Date(Date.now() + 15 * 86400000);
         break;
+      case 'housing_repair':
+        c.need = 'Roof is leaking and walls damaged; repair needed before monsoon';
+        c.interventions = ['housing'];
+        c.targetOutcome = 'Safe, repaired home before June';
+        c.housing = { purpose: 'repair', currentHousing: 'owned', propertyDetails: '2 rooms, tin roof, cracked walls', estimatedCost: 180000, ownContribution: 30000, completionStatus: 'in_progress' };
+        c.amountApplied = 150000;
+        sanction(5);
+        c.amountSanctioned = 150000;
+        c.installmentAmount = Math.ceil(150000 / 24);
+        disburse(5, 150000);
+        c.utilizations.push({ date: monthsAgo(4), item: 'Roofing sheets and cement', amount: 95000, vendor: 'Saifee Building Material', verified: true, approvedPurpose: true, verifiedAt: monthsAgo(4, 20), siteVisit: true, resultingAsset: 'New roof installed' });
+        c.stage = 'monitoring';
+        visit(2, 'Roof complete; wall plastering pending', 'Complete plastering this month');
+        break;
+      case 'housing_deposit':
+        c.need = 'Family evicted; needs deposit for a rented flat';
+        c.interventions = ['housing'];
+        c.targetOutcome = 'Family settled in rented home';
+        c.housing = { purpose: 'rent_deposit', currentHousing: 'family', propertyDetails: '1BHK near Mohalla, rent ₹6,000', estimatedCost: 36000, completionStatus: 'completed', completedAt: monthsAgo(1) };
+        c.amountSanctioned = 36000;
+        c.disbursements.push({ amount: 36000, date: monthsAgo(2), mode: 'Direct to landlord', reference: 'Rent agreement', tranche: 1 });
+        c.utilizations.push({ date: monthsAgo(2), item: 'Deposit paid to landlord', amount: 36000, verified: true, approvedPurpose: true, verifiedAt: monthsAgo(2), resultingAsset: 'Rent agreement signed' });
+        c.stage = 'monitoring';
+        break;
+      case 'education_fees':
+        c.need = 'Daughter admitted to B.Pharm; first-year fees';
+        c.interventions = ['education'];
+        c.targetOutcome = 'Completes first year with passing marks';
+        c.education = { studentName: `${pickOne(FEM)} ${h.headName.split(' ').slice(-1)[0]}`, relation: 'Daughter', age: 18, level: 'graduation', course: 'B.Pharm 1st year', institution: 'Govt. College of Pharmacy', academicYear: '2026-27', annualFees: 68000, familyContribution: 18000, studyStatus: 'studying' };
+        c.amountSanctioned = 50000;
+        c.disbursements.push({ amount: 50000, date: monthsAgo(3), mode: 'Direct to college', reference: 'Fee receipt', tranche: 1 });
+        c.utilizations.push({ date: monthsAgo(3), item: 'College fees paid', amount: 50000, verified: true, approvedPurpose: true, verifiedAt: monthsAgo(3), resultingAsset: 'Admission confirmed' });
+        c.stage = 'monitoring';
+        break;
       case 'skill':
+        c.education = { studentName: `${pickOne(FIRST)} ${h.headName.split(' ').slice(-1)[0]}`, relation: 'Son', age: 19, level: 'vocational', course: 'Electrician (ITI short-term)', institution: 'ITI Nagpur', annualFees: 15000, studyStatus: i % 2 ? 'completed' : 'studying' };
         c.stage = 'monitoring';
         training('Electrician course (ITI short-term)', 'vocational', i % 2 ? 'completed' : 'ongoing', i % 2 === 1);
         c.monthlyUpdates.push({ month: monthKey(monthsAgo(1)), householdIncome: Math.round(base.householdIncome * (i % 2 ? 1.25 : 1)), jobsCreated: i % 2 ? 1 : 0, familyMembersEmployed: i % 2 ? 1 : 0, source: 'counsellor' });
         break;
       case 'welfare':
+        c.education = { studentName: `${pickOne(FEM)} ${h.headName.split(' ').slice(-1)[0]}`, relation: 'Daughter', age: 14, level: 'school', course: 'Class 9', institution: 'Burhani English School', academicYear: '2026-27', annualFees: 24000, studyStatus: 'studying' };
         c.stage = 'monitoring';
         c.amountSanctioned = 24000;
         c.disbursements.push({ amount: 24000, date: monthsAgo(4), mode: 'Direct to school', reference: 'Fee receipt', tranche: 1 });
@@ -398,10 +444,7 @@ async function run() {
     if (!firstCase && s.kind === 'great') firstCase = c;
     made += 1;
   }
-  await Counter.findByIdAndUpdate('case-QH', { seq: caseSeq.QH || 0 }, { upsert: true });
-  await Counter.findByIdAndUpdate('case-TR', { seq: caseSeq.TR || 0 }, { upsert: true });
-  await Counter.findByIdAndUpdate('case-SKILL', { seq: caseSeq.SKILL || 0 }, { upsert: true });
-  await Counter.findByIdAndUpdate('case-WELFARE', { seq: caseSeq.WELFARE || 0 }, { upsert: true });
+  for (const t of ['housing', 'education', 'business']) await Counter.findByIdAndUpdate(`case-${t}`, { seq: caseSeq[t] || 0 }, { upsert: true });
   for (const m of mauzes) await Counter.findByIdAndUpdate(`hh-${m._id}`, { seq: hhSeq[m._id] }, { upsert: true });
   console.log(`Cases: ${made}`);
 
@@ -428,6 +471,30 @@ async function run() {
     await Enquiry.create({ refNo: `REQ-${String(i + 1).padStart(5, '0')}`, name: `${pickOne(FEM)} ${pickOne(LAST)}`, mobile: `97${R(10000000, 99999999)}`, mauze: mauzes[i]._id, zone: mauzes[i].zone, supportType: t, message: 'Would like guidance (demo request).', status: i ? 'new' : 'contacted' }).catch(() => {});
   }
   await Counter.findByIdAndUpdate('enquiry', { seq: e.length }, { upsert: true });
+
+  // Directory & fostership samples (made-up names and numbers)
+  const pros = [
+    ['architect', 'Sample Design Studio', 12],
+    ['architect', 'Test Architects', 4],
+    ['structural_civil', 'Demo Structures', 9],
+    ['mep', 'Sample MEP Services', 8],
+    ['interior', 'Sample Interiors', 6],
+    ['promoter_builder', 'Demo Builders', 20],
+  ];
+  for (const [k, [cat, company, exp]] of pros.entries()) {
+    await Professional.create({ itsNo: String(11112201 + k), name: `${pickOne(FIRST)} bhai Sample bhai ${pickOne(LAST)}`, mobile: `+9190000000${21 + k}`, category: cat, company, experienceYears: exp, zone: zone._id, addedBy: zbc._id, addedByName: zbc.name }).catch(() => {});
+  }
+  const office = [
+    ['Jamiat Mushrif', 1],
+    ['Jamiat Masool', 2],
+    ['Jamiat Co-ordinator', 3],
+    ['FC', 4],
+  ];
+  for (const [k, [desig, order]] of office.entries()) {
+    await OfficeContact.create({ name: `${pickOne(FIRST)} bhai Sample${k}`, designation: desig, zone: zone._id, mobile: `+9190000000${11 + k}`, whatsapp: `+9190000000${11 + k}`, order }).catch(() => {});
+  }
+  const cou = await User.findOne({ mobile: '9000000201' });
+  for (const its of ['40111101', '40111102', '40111103']) await Foster.create({ itsNo: its, zone: cou.zone, mauze: cou.mauze, addedBy: cou._id, addedByName: cou.name }).catch(() => {});
 
   console.log('\nDemo logins (password Demo@123 unless noted):');
   console.log(`  HQ admin        ${process.env.ADMIN_MOBILE || '9999999999'} / ${process.env.ADMIN_PASSWORD || 'Admin@123'}`);

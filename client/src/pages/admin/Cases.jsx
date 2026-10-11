@@ -3,14 +3,15 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../../api';
 import { useAuth } from '../../auth';
 import { useLoad, Loading, ErrorBox, Empty, RiskBadge, StageBadge } from '../../ui';
-import { SCHEMES, STAGES, FINAL, RISK_SHORT, inr, date } from '../../lib';
+import { SCHEMES, STAGES, FINAL, RISK_SHORT, CASE_TYPES, inr, date } from '../../lib';
+import { TypeBadge } from '../../components/TypeDetails';
 import { Pager } from './Households';
 
 export default function Cases() {
   const { user } = useAuth();
   const nav = useNavigate();
   const [sp] = useSearchParams();
-  const [f, setF] = useState({ page: 1, risk: sp.get('risk') || '', mine: user.role === 'counsellor' ? '1' : '' });
+  const [f, setF] = useState({ page: 1, caseType: sp.get('caseType') || '', risk: sp.get('risk') || '', mine: user.role === 'counsellor' ? '1' : '' });
   const mauzes = useLoad(() => api('/org/mauzes'), []);
   const qs = new URLSearchParams(Object.entries(f).filter(([, v]) => v)).toString();
   const d = useLoad(() => api(`/cases?${qs}`), [qs]);
@@ -48,7 +49,8 @@ export default function Cases() {
           <input type="search" placeholder="Case number, name or mobile" value={f.q || ''} onChange={set('q')} />
         </label>
         {['hq', 'zbc'].includes(user.role) && sel('mauze', 'Mauze', Object.fromEntries((mauzes.data || []).map((m) => [m._id, m.name])))}
-        {sel('scheme', 'Scheme', SCHEMES)}
+        {sel('caseType', 'Case type', CASE_TYPES)}
+        {sel('scheme', 'Support route', SCHEMES)}
         {sel('stage', 'Stage', STAGES)}
         {sel('risk', 'Risk', RISK_SHORT, 'Any')}
         {sel('finalStatus', 'Status', FINAL)}
@@ -71,7 +73,7 @@ export default function Cases() {
               <thead>
                 <tr>
                   <th>Beneficiary</th>
-                  <th>Scheme</th>
+                  <th>Type</th>
                   <th>Stage</th>
                   <th>Risk</th>
                   <th className="r">Sanctioned</th>
@@ -90,7 +92,10 @@ export default function Cases() {
                         {c.caseNo}, {c.mauze?.name}
                       </small>
                     </td>
-                    <td>{SCHEMES[c.scheme]}</td>
+                    <td>
+                      <TypeBadge type={c.caseType} />
+                      <small className="block muted">{SCHEMES[c.scheme]}</small>
+                    </td>
                     <td>
                       <StageBadge stage={c.stage} />
                     </td>

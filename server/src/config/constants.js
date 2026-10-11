@@ -17,6 +17,12 @@ const SCHEMES = {
 };
 const BUSINESS_SCHEMES = ['QH', 'TR'];
 
+// The three kinds of upliftment case
+const CASE_TYPES = { housing: 'Housing', education: 'Education', business: 'Business' };
+const CASE_PREFIX = { housing: 'HSG', education: 'EDU', business: 'BUS' };
+// Which support routes suit each case type (first one is the default)
+const TYPE_SCHEMES = { housing: ['QH', 'WELFARE'], education: ['WELFARE', 'QH', 'SKILL'], business: ['QH', 'TR', 'SKILL'] };
+
 const STAGES = ['identified', 'planned', 'feasibility', 'sanctioned', 'disbursed', 'monitoring', 'closed'];
 
 const FINAL_STATUS = ['ongoing', 'achieved', 'needs_intervention', 'closed'];
@@ -65,6 +71,9 @@ module.exports = {
   STAFF_ROLES,
   SCHEMES,
   BUSINESS_SCHEMES,
+  CASE_TYPES,
+  CASE_PREFIX,
+  TYPE_SCHEMES,
   STAGES,
   FINAL_STATUS,
   HOUSEHOLD_CATEGORIES,

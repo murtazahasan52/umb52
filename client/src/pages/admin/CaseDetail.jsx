@@ -3,7 +3,10 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../../api';
 import { useAuth } from '../../auth';
 import { useLoad, Loading, ErrorBox, Tabs, RiskBadge, StageBadge, FinalBadge, FormModal, Field, useToast } from '../../ui';
-import { SCHEMES, STAGES, STAGE_ORDER, FINAL, inr, date } from '../../lib';
+import { SCHEMES, STAGES, STAGE_ORDER, FINAL, CASE_TYPES, inr, date } from '../../lib';
+import CaseMpi from './CaseMpi';
+import { TypeBadge } from '../../components/TypeDetails';
+import { DocumentsTab } from './CaseDocs';
 import { PlanTab, FeasibilityTab, MoneyTab, UtilizationTab, ProgressTab, VisitsTab, TrainingTab, AlertsTab, OutcomeTab, HistoryTab } from './CaseTabs';
 
 export default function CaseDetail() {
@@ -29,6 +32,8 @@ export default function CaseDetail() {
   const isMoney = ['QH', 'WELFARE'].includes(c.scheme) || c.financials.disbursed > 0;
   const tabs = [
     { key: 'plan', label: 'Plan' },
+    { key: 'profile', label: 'Case profile (MPI)' },
+    { key: 'documents', label: 'Forms & documents', count: c.documents?.length || undefined },
     ...(c.scheme === 'QH' ? [{ key: 'feasibility', label: 'Feasibility' }] : []),
     ...(isMoney ? [{ key: 'money', label: 'Disbursement & repayment' }] : []),
     ...(isMoney ? [{ key: 'utilization', label: 'Utilization', count: c.utilizations.length }] : []),
@@ -54,13 +59,18 @@ export default function CaseDetail() {
           </p>
           <h1>{c.beneficiaryName}</h1>
           <p className="sub">
+            {CASE_TYPES[c.caseType] ? `${CASE_TYPES[c.caseType]} case, ` : ''}
             {SCHEMES[c.scheme]}, {c.mauze?.name}. Household <Link to={`/admin/households/${c.household?._id}`}>{c.household?.code}</Link>
             {c.counsellor ? `. Counsellor ${c.counsellor.name}` : ''}
           </p>
         </div>
         <div className="head-actions">
+          <TypeBadge type={c.caseType} />
           <RiskBadge risk={c.risk} />
           <FinalBadge status={c.finalStatus} />
+          <a className="btn ghost sm" href={`/admin/cases/${c._id}/print`} target="_blank" rel="noreferrer">
+            Print case file
+          </a>
           <button className="btn ghost sm" onClick={() => setStatusOpen(true)}>
             Change status
           </button>
@@ -122,6 +132,8 @@ export default function CaseDetail() {
       <Tabs tabs={tabs} active={tab} onChange={setTab} />
       <div className="tab-body">
         {tab === 'plan' && <PlanTab c={c} act={act} user={user} />}
+        {tab === 'profile' && <CaseMpi key={c.updatedAt ? 'mpi' : 'mpi0'} c={c} act={act} user={user} />}
+        {tab === 'documents' && <DocumentsTab c={c} act={act} />}
         {tab === 'feasibility' && <FeasibilityTab c={c} act={act} user={user} />}
         {tab === 'money' && <MoneyTab c={c} act={act} user={user} />}
         {tab === 'utilization' && <UtilizationTab c={c} act={act} user={user} />}

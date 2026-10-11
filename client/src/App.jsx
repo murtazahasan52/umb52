@@ -7,7 +7,7 @@ import AdminLayout from './layouts/AdminLayout';
 import AppLayout from './layouts/AppLayout';
 
 import Home from './pages/public/Home';
-import Framework from './pages/public/Framework';
+import FamilyForm from './pages/public/FamilyForm';
 import RequestSupport from './pages/public/RequestSupport';
 import Grievance from './pages/public/Grievance';
 import Login from './pages/public/Login';
@@ -25,6 +25,12 @@ import Users from './pages/admin/Users';
 import Mauzes from './pages/admin/Mauzes';
 import Reports from './pages/admin/Reports';
 import Account from './pages/admin/Account';
+import Register from './pages/admin/Register';
+import Forms from './pages/admin/Forms';
+import Import from './pages/admin/Import';
+import CasePrint from './pages/admin/CasePrint';
+import Fostership from './pages/admin/Fostership';
+import Directory from './pages/admin/Directory';
 
 import MyPlan from './pages/app/MyPlan';
 import Repayments from './pages/app/Repayments';
@@ -46,12 +52,20 @@ export default function App() {
     <Routes>
       <Route element={<PublicLayout />}>
         <Route path="/" element={<Home />} />
-        <Route path="/framework" element={<Framework />} />
         <Route path="/request-support" element={<RequestSupport />} />
         <Route path="/grievance" element={<Grievance />} />
         <Route path="/login" element={<Login />} />
       </Route>
 
+      <Route path="/form/:token" element={<FamilyForm />} />
+      <Route
+        path="/admin/cases/:id/print"
+        element={
+          <Guard staff>
+            <CasePrint />
+          </Guard>
+        }
+      />
       <Route
         path="/admin"
         element={
@@ -74,6 +88,11 @@ export default function App() {
         <Route path="mauzes" element={<Mauzes />} />
         <Route path="reports" element={<Reports />} />
         <Route path="account" element={<Account />} />
+        <Route path="register" element={<Register />} />
+        <Route path="forms" element={<Forms />} />
+        <Route path="import" element={<Import />} />
+        <Route path="fostership" element={<Fostership />} />
+        <Route path="directory" element={<Directory />} />
       </Route>
 
       <Route

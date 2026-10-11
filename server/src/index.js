@@ -56,13 +56,31 @@ if (process.env.NODE_ENV !== 'test') app.use(morgan('tiny'));
 
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date() }));
 
+// Open /api/health/db in the browser to check the database connection
+app.get('/api/health/db', (req, res) => {
+  ensureDB()
+    .then(() => res.json({ database: 'connected', mongoUriSet: !!process.env.MONGO_URI }))
+    .catch((e) => res.status(503).json({ database: 'not connected', mongoUriSet: !!process.env.MONGO_URI, reason: dbHint(e) }));
+});
+
+// Explain a failed connection in plain words (never echoes the connection string)
+function dbHint(e) {
+  const m = String(e?.message || '');
+  if (!process.env.MONGO_URI) return 'MONGO_URI is not set on the server. Add it in Vercel → Settings → Environment Variables, then redeploy.';
+  if (/bad auth|authentication failed/i.test(m)) return 'Atlas rejected the username or password in MONGO_URI. Check the database user (Atlas → Database Access) and URL-encode special characters in the password.';
+  if (/ENOTFOUND|querySrv|EBADNAME/i.test(m)) return 'The cluster address in MONGO_URI was not found. Copy the connection string again from Atlas → Connect → Drivers.';
+  if (/Invalid scheme|Invalid connection string|URI|hostname/i.test(m)) return 'MONGO_URI is not a valid connection string. It must start with mongodb+srv:// and have no quotes or spaces.';
+  if (/timed out|Server selection|ECONNREFUSED|whitelist|not authorized to access|IP/i.test(m)) return 'Atlas is blocking the connection. In Atlas → Network Access, add 0.0.0.0/0 and wait until it shows Active.';
+  return `Database connection failed: ${m.replace(/mongodb(\+srv)?:\/\/[^\s]+/g, '[hidden]').slice(0, 160)}`;
+}
+
 // Every API request waits for the database connection
 app.use('/api', (req, res, next) => {
   ensureDB()
     .then(() => next())
     .catch((e) => {
       console.error('MongoDB connection failed:', e.message);
-      res.status(503).json({ message: 'Database is not reachable. Check MONGO_URI and the Atlas network access list.' });
+      res.status(503).json({ message: dbHint(e) });
     });
 });
 
@@ -70,6 +88,8 @@ app.use('/api/auth/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 30 }));
 
 // ---------------- API
 app.use('/api/auth', require('./routes/auth'));
+const forms = require('./routes/forms');
+app.use('/api/public/form', forms.pub); // family form links (no login)
 app.use('/api/public', require('./routes/public'));
 app.use('/api/org', require('./routes/org'));
 app.use('/api/users', require('./routes/users'));
@@ -78,6 +98,9 @@ app.use('/api/cases', require('./routes/cases'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/inbox', require('./routes/inbox'));
 app.use('/api/portal', require('./routes/portal'));
+app.use('/api/forms', forms.admin);
+app.use('/api/search', require('./routes/search'));
+app.use('/api/directory', require('./routes/directory'));
 const files = require('./routes/uploads');
 app.use('/api/uploads', files.uploadRouter); // upload evidence (stored in MongoDB)
 app.use('/api/files', files.fileRouter); // view evidence (staff only, ?t=token)

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api';
 import { useLoad, Loading, ErrorBox, RiskBadge, Empty } from '../../ui';
-import { SCHEMES } from '../../lib';
+import { SCHEMES, CASE_TYPES } from '../../lib';
 import ScopeFilter, { scopeQuery } from './ScopeFilter';
 
 const ACTION = {
@@ -53,6 +53,7 @@ export default function Warnings() {
               </div>
               <h3>{w.beneficiaryName}</h3>
               <p className="muted">
+                {CASE_TYPES[w.caseType] ? `${CASE_TYPES[w.caseType]}, ` : ''}
                 {SCHEMES[w.scheme]}, {w.mauze}
                 {w.counsellor ? `. Counsellor: ${w.counsellor}` : '. No counsellor assigned'}
               </p>

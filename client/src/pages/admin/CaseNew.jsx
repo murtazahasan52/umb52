@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../../api';
 import { Field, Chips, useLoad, useToast } from '../../ui';
-import { SCHEMES, INTERVENTIONS, SEGMENTS, inr } from '../../lib';
+import { SCHEMES, INTERVENTIONS, SEGMENTS, CASE_TYPES, TYPE_SCHEMES, inr } from '../../lib';
+import { TypePicker, TypeFields } from '../../components/TypeDetails';
+
+const DKEY = { housing: 'housing', education: 'education', business: 'businessDetail' };
 
 const SCHEME_HELP = {
   QH: 'Interest-free financial assistance, subject to eligibility, feasibility, repayment capacity and policy.',
@@ -47,6 +50,7 @@ export default function CaseNew() {
 
   const submit = async (e) => {
     e.preventDefault();
+    if (!form.caseType) return setErr('Choose the case type: Housing, Education or Business');
     setBusy(true);
     setErr('');
     try {
@@ -112,9 +116,20 @@ export default function CaseNew() {
           </section>
 
           <section className="panel">
-            <h2>Scheme</h2>
+            <h2>Case type</h2>
+            <TypePicker value={form.caseType} onChange={(t) => setForm((f) => ({ ...f, caseType: t, scheme: TYPE_SCHEMES[t][0] }))} />
+            {form.caseType && (
+              <>
+                <h3 className="sub-h">{CASE_TYPES[form.caseType]} details</h3>
+                <TypeFields type={form.caseType} base={DKEY[form.caseType]} {...P} />
+              </>
+            )}
+          </section>
+
+          <section className="panel">
+            <h2>Support route</h2>
             <div className="scheme-pick" role="radiogroup">
-              {Object.entries(SCHEMES).map(([k, l]) => (
+              {Object.entries(SCHEMES).filter(([k]) => !form.caseType || TYPE_SCHEMES[form.caseType].includes(k)).map(([k, l]) => (
                 <label key={k} className={`scheme-opt ${form.scheme === k ? 'on' : ''}`}>
                   <input type="radio" name="scheme" value={k} checked={form.scheme === k} onChange={() => setForm((f) => ({ ...f, scheme: k }))} required />
                   <strong>{l}</strong>

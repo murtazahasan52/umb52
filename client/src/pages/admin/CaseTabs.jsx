@@ -4,7 +4,8 @@ import { CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContai
 import { api, fileUrl } from '../../api';
 import { canSanction } from '../../auth';
 import { Field, Chips, FormModal, useLoad, useToast, Empty, StageBadge } from '../../ui';
-import { SCHEMES, INTERVENTIONS, SEGMENTS, TRAINING, VISIT_TYPES, inr, inrShort, date, dateInput, monthLabel, prevMonth, num } from '../../lib';
+import { TypeFields } from '../../components/TypeDetails';
+import { CASE_TYPES, HOUSING_PURPOSE, EDU_LEVEL, STUDY_STATUS, BUSINESS_PURPOSE, COMPLETION, SCHEMES, INTERVENTIONS, SEGMENTS, TRAINING, VISIT_TYPES, inr, inrShort, date, dateInput, monthLabel, prevMonth, num } from '../../lib';
 
 const useStaff = (c) => useLoad(() => api(`/users/staff?mauze=${c.mauze?._id}`), [c.mauze?._id]);
 const staffOptions = (s) => Object.fromEntries((s.data || []).map((x) => [x._id, `${x.name}${x.designation ? ` (${x.designation})` : ''}`]));
@@ -71,6 +72,8 @@ export function PlanTab({ c, act }) {
           )}
         </dl>
       </Section>
+
+      <TypeSection c={c} act={act} />
 
       <div className="cols-2">
         <Section title="Baseline before support">
@@ -195,6 +198,74 @@ export function PlanTab({ c, act }) {
         </FormModal>
       )}
     </>
+  );
+}
+
+// ======================================================= TYPE-SPECIFIC DETAILS
+const DKEY = { housing: 'housing', education: 'education', business: 'businessDetail' };
+function TypeSection({ c, act }) {
+  const [edit, setEdit] = useState(false);
+  const type = c.caseType || 'business';
+  const d = c[DKEY[type]] || {};
+  const rows =
+    type === 'housing'
+      ? [
+          ['Help needed for', HOUSING_PURPOSE[d.purpose]],
+          ['Current housing', d.currentHousing],
+          ['Property', [d.propertyAddress, d.propertyDetails].filter(Boolean).join('. ')],
+          ['Estimated cost', d.estimatedCost != null ? inr(d.estimatedCost) : null],
+          ['Own contribution', d.ownContribution != null ? inr(d.ownContribution) : null],
+          ['Work status', COMPLETION[d.completionStatus] ? `${COMPLETION[d.completionStatus]}${d.completedAt ? `, ${date(d.completedAt)}` : ''}` : null],
+        ]
+      : type === 'education'
+      ? [
+          ['Student', [d.studentName, d.relation, d.age ? `${d.age} yrs` : ''].filter(Boolean).join(', ')],
+          ['Course', [EDU_LEVEL[d.level], d.course].filter(Boolean).join(': ')],
+          ['Institution', [d.institution, d.academicYear].filter(Boolean).join(', ')],
+          ['Annual fees', d.annualFees != null ? inr(d.annualFees) : null],
+          ['Other costs / family share', [d.otherCosts != null ? inr(d.otherCosts) : '', d.familyContribution != null ? inr(d.familyContribution) : ''].filter(Boolean).join(' / ')],
+          ['Last result', d.lastResult],
+          ['Study status', STUDY_STATUS[d.studyStatus]],
+        ]
+      : [
+          ['Help needed for', BUSINESS_PURPOSE[d.purpose]],
+          ['Business', [d.businessName, d.businessType].filter(Boolean).join(', ')],
+          ['Estimated cost', d.estimatedCost != null ? inr(d.estimatedCost) : null],
+          ['Own contribution', d.ownContribution != null ? inr(d.ownContribution) : null],
+        ];
+  return (
+    <Section
+      title={`${CASE_TYPES[type]} details`}
+      action={
+        <button className="btn ghost sm" onClick={() => setEdit(true)}>
+          Edit
+        </button>
+      }
+    >
+      <dl className="kv wide">
+        {rows.map(([k, v]) => (
+          <div className="kv-row" key={k}>
+            <dt>{k}</dt>
+            <dd>{v || '—'}</dd>
+          </div>
+        ))}
+      </dl>
+      {edit && (
+        <FormModal
+          wide
+          title={`${CASE_TYPES[type]} details`}
+          initial={{ caseType: type, [DKEY[type]]: { ...d } }}
+          onClose={() => setEdit(false)}
+          onSubmit={(v) => act('', 'PUT', { [DKEY[type]]: v[DKEY[type]] }, 'Details saved')}
+        >
+          {(form, setForm) => (
+            <div className="span-2">
+              <TypeFields type={type} base={DKEY[type]} form={form} setForm={setForm} />
+            </div>
+          )}
+        </FormModal>
+      )}
+    </Section>
   );
 }
 
@@ -665,7 +736,7 @@ const MONTHLY_FIELDS = (form, setForm, isBiz) => {
 
 export function ProgressTab({ c, act }) {
   const [edit, setEdit] = useState(null);
-  const isBiz = ['QH', 'TR'].includes(c.scheme);
+  const isBiz = (!c.caseType || c.caseType === 'business') && ['QH', 'TR'].includes(c.scheme);
   const ups = [...c.monthlyUpdates].sort((a, b) => (a.month < b.month ? -1 : 1));
   const b = c.baseline || {};
   return (
@@ -678,10 +749,10 @@ export function ProgressTab({ c, act }) {
                 <CartesianGrid stroke="#E2EAE5" vertical={false} />
                 <XAxis dataKey="month" tickFormatter={monthLabel} tick={{ fontSize: 12 }} />
                 <YAxis yAxisId="l" tickFormatter={inrShort} tick={{ fontSize: 12 }} width={64} />
-                {isBiz && <YAxis yAxisId="s" orientation="right" tickFormatter={inrShort} tick={{ fontSize: 12, fill: '#0F6B4F' }} width={64} />}
+                {isBiz && <YAxis yAxisId="s" orientation="right" tickFormatter={inrShort} tick={{ fontSize: 12, fill: '#003399' }} width={64} />}
                 <Tooltip formatter={(v) => inr(v)} labelFormatter={monthLabel} />
                 <Legend />
-                {isBiz && <Line yAxisId="s" dataKey="sales" name="Sales (right axis)" stroke="#0F6B4F" strokeWidth={2} strokeOpacity={0.55} dot={false} />}
+                {isBiz && <Line yAxisId="s" dataKey="sales" name="Sales (right axis)" stroke="#003399" strokeWidth={2} strokeOpacity={0.55} dot={false} />}
                 {isBiz && <Line yAxisId="l" dataKey="netProfit" name="Net profit" stroke="#A9822E" strokeWidth={2.5} dot={{ r: 3 }} />}
                 <Line yAxisId="l" dataKey="householdIncome" name="Household income" stroke="#4E6E86" strokeWidth={2.5} dot={{ r: 3 }} />
                 {isBiz && b.netProfit != null && <ReferenceLine yAxisId="l" y={b.netProfit} stroke="#A9822E" strokeDasharray="4 4" label={{ value: 'Baseline profit', fontSize: 11, fill: '#7a6223', position: 'insideTopLeft' }} />}

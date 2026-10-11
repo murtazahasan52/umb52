@@ -41,7 +41,7 @@ router.get(
     const lim = Math.min(Number(limit) || 50, 500);
     const [items, total] = await Promise.all([
       Household.find(f)
-        .select('-confidentialNotes -members')
+        .select('-confidentialNotes -members -documents')
         .populate('mauze', 'name')
         .sort('-updatedAt')
         .skip((Number(page) - 1) * lim)
@@ -52,12 +52,131 @@ router.get(
   })
 );
 
+
+// ---------- Excel / CSV import (HQ super-admin only)
+const { COLUMNS, normaliseRow, clean: cleanImport } = require('../utils/importer');
+const { resolveMauze, createHousehold, createCase } = require('../utils/records');
+
+router.get('/import/columns', allow(ROLES.HQ), (req, res) => res.json(COLUMNS));
+
+router.post(
+  '/import',
+  allow(ROLES.HQ),
+  ah(async (req, res) => {
+    const rows = Array.isArray(req.body.rows) ? req.body.rows.slice(0, 500) : [];
+    const { dryRun = false, createMissingMauze = false, updateExisting = true, startRow = 2 } = req.body;
+    if (!rows.length) return res.status(400).json({ message: 'No rows received' });
+    const cache = new Map();
+    const results = [];
+    const seenIts = new Set();
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+    let cases = 0;
+
+    for (let i = 0; i < rows.length; i += 1) {
+      const line = startRow + i;
+      const { row, errors, empty } = normaliseRow(rows[i]);
+      if (empty) continue;
+      const result = { line, name: row.headName || '—', status: 'ok', messages: [] };
+      try {
+        if (errors.length) throw new Error(errors.join('; '));
+        if (row.itsNo && seenIts.has(row.itsNo)) throw new Error(`ITS ${row.itsNo} appears twice in this file`);
+        if (row.itsNo) seenIts.add(row.itsNo);
+
+        let m;
+        try {
+          m = await resolveMauze(row.mauze, row.zone, { create: false, cache });
+        } catch (e) {
+          if (!createMissingMauze) throw e;
+          if (dryRun) {
+            if (!row.zone) throw new Error(`Mauze "${row.mauze}" does not exist. Add a Zone column to create it.`);
+            result.messages.push(`New Mauze "${row.mauze}" will be created`);
+          } else {
+            m = await resolveMauze(row.mauze, row.zone, { create: true, cache });
+          }
+        }
+
+        const existing = row.itsNo
+          ? await Household.findOne({ itsNo: row.itsNo })
+          : row.mobile
+          ? await Household.findOne({ mobile: row.mobile, headName: new RegExp(`^${row.headName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') })
+          : null;
+
+        const { caseType, scheme, need, amountApplied, counsellorMobile, mauze, zone, assessed, estimatedCost, housingPurpose, studentName, course, institution, annualFees, ...fields } = row;
+        const typeDetails =
+          caseType === 'housing'
+            ? { housing: cleanImport({ purpose: housingPurpose, estimatedCost }) }
+            : caseType === 'education'
+            ? { education: cleanImport({ studentName, course, institution, annualFees, studyStatus: 'studying' }) }
+            : caseType === 'business'
+            ? { businessDetail: cleanImport({ estimatedCost, businessName: fields.business?.name, businessType: fields.business?.type }) }
+            : {};
+        const data = cleanImport(fields);
+
+        if (existing) {
+          if (!updateExisting) {
+            result.status = 'skipped';
+            result.messages.push(`Already registered as ${existing.code}`);
+            skipped += 1;
+          } else {
+            result.status = 'updated';
+            result.messages.push(`Updates ${existing.code}`);
+            if (!dryRun) {
+              const merged = { ...data };
+              if (data.business) merged.business = { ...(existing.business?.toObject?.() || {}), ...data.business };
+              if (data.debts) merged.debts = { ...(existing.debts?.toObject?.() || {}), ...data.debts };
+              Object.assign(existing, merged, { importedAt: new Date() });
+              if (assessed && !existing.assessedAt) {
+                existing.assessedAt = new Date();
+                existing.assessedBy = req.user._id;
+              }
+              if (m && String(existing.mauze) !== String(m._id)) {
+                existing.mauze = m._id;
+                existing.zone = m.zone;
+              }
+              await existing.save();
+            }
+            updated += 1;
+          }
+        } else {
+          result.status = 'created';
+          if (!dryRun) {
+            const h = await createHousehold({ ...data, assessed, importedAt: new Date() }, m, req.user);
+            result.messages.push(`Registered as ${h.code}`);
+            result.householdId = h._id;
+            if (caseType) {
+              const c = await createCase(h, { caseType, scheme, need, amountApplied, counsellorMobile, ...typeDetails }, req.user, 'Case opened from Excel import');
+              result.messages.push(`Case ${c.caseNo} opened`);
+              cases += 1;
+            }
+          } else if (caseType) {
+            result.messages.push(`A ${caseType} case will be opened`);
+            cases += 1;
+          }
+          created += 1;
+        }
+      } catch (e) {
+        result.status = 'error';
+        result.messages.push(e.message);
+      }
+      results.push(result);
+    }
+    if (!dryRun) audit(req, 'import', 'Household', null, `${created} created, ${updated} updated, ${skipped} skipped, ${cases} cases`);
+    res.json({
+      dryRun,
+      summary: { rows: results.length, created, updated, skipped, cases, errors: results.filter((r) => r.status === 'error').length },
+      results,
+    });
+  })
+);
+
 router.get(
   '/:id',
   ah(async (req, res) => {
     const h = await Household.findById(req.params.id).populate('mauze zone', 'name').populate('assessedBy', 'name');
     if (!canAccessDoc(req.user, h)) return res.status(404).json({ message: 'Not found' });
-    const cases = await Case.find({ household: h._id }).select('caseNo scheme stage finalStatus risk amountSanctioned createdAt beneficiaryName');
+    const cases = await Case.find({ household: h._id }).select('caseNo caseType scheme stage finalStatus risk amountSanctioned createdAt beneficiaryName');
     audit(req, 'view', 'Household', h._id, h.code);
     res.json({ household: h, cases });
   })
@@ -106,6 +225,37 @@ router.put(
     await h.save();
     audit(req, 'update', 'Household', h._id, h.code);
     res.json(h);
+  })
+);
+
+// ---------- Scanned forms & documents
+router.post(
+  '/:id/documents',
+  ah(async (req, res) => {
+    const h = await Household.findById(req.params.id);
+    if (!canAccessDoc(req.user, h)) return res.status(404).json({ message: 'Not found' });
+    const items = Array.isArray(req.body.documents) ? req.body.documents : [req.body];
+    items.forEach((d) => {
+      if (!d.url || !/^\/api\/files\/[a-f0-9]{24}$/.test(d.url)) return;
+      h.documents.push({ title: d.title || d.fileName || 'Document', category: d.category || 'other', url: d.url, fileName: d.fileName, note: d.note, by: req.user._id, byName: req.user.name });
+    });
+    await h.save();
+    audit(req, 'upload', 'Household', h._id, `${items.length} document(s)`);
+    res.status(201).json(h.documents);
+  })
+);
+
+router.delete(
+  '/:id/documents/:did',
+  ah(async (req, res) => {
+    const h = await Household.findById(req.params.id);
+    if (!canAccessDoc(req.user, h)) return res.status(404).json({ message: 'Not found' });
+    const d = h.documents.id(req.params.did);
+    if (!d) return res.status(404).json({ message: 'Document not found' });
+    d.deleteOne();
+    await h.save();
+    audit(req, 'delete', 'HouseholdDocument', h._id, req.params.did);
+    res.json(h.documents);
   })
 );
 

@@ -4,7 +4,7 @@ const Case = require('../models/Case');
 const Household = require('../models/Household');
 const User = require('../models/User');
 const { requireAuth, allow, scopeFilter, canAccessDoc } = require('../middleware/auth');
-const { ROLES, STAFF_ROLES, STAGES } = require('../config/constants');
+const { ROLES, STAFF_ROLES, STAGES, CASE_TYPES, CASE_PREFIX, TYPE_SCHEMES } = require('../config/constants');
 const { nextSeq } = require('../models/Counter');
 const { ah, audit, pick, rx } = require('../utils/helpers');
 const { refreshRisk, financials, improvement, freshen } = require('../utils/warnings');
@@ -13,7 +13,7 @@ router.use(requireAuth, allow(...STAFF_ROLES));
 
 const SANCTION_ROLES = [ROLES.HQ, ROLES.ZBC]; // authorised review committee
 const POP = [
-  { path: 'household', select: 'code headName mobile itsNo address monthlyHouseholdIncome business categories' },
+  { path: 'household', select: 'code headName mobile itsNo address monthlyHouseholdIncome mainIncomeSource business categories totalMembers earningMembers members debts housing' },
   { path: 'mauze zone', select: 'name code' },
   { path: 'counsellor mentor createdBy beneficiaryUser', select: 'name mobile designation' },
   { path: 'feasibility.assessedBy feasibility.decidedBy', select: 'name' },
@@ -59,9 +59,10 @@ router.get(
   '/',
   ah(async (req, res) => {
     const f = { ...scopeFilter(req.user) };
-    const { mauze, zone, scheme, stage, risk, finalStatus, counsellor, mine, q, page = 1, limit = 50 } = req.query;
+    const { mauze, zone, caseType, scheme, stage, risk, finalStatus, counsellor, mine, q, page = 1, limit = 50 } = req.query;
     if (mauze && ![ROLES.MAUZE, ROLES.COUNSELLOR].includes(req.user.role)) f.mauze = mauze;
     if (zone && req.user.role === ROLES.HQ) f.zone = zone;
+    if (caseType) f.caseType = caseType;
     if (scheme) f.scheme = scheme;
     if (stage) f.stage = stage;
     if (risk) f.risk = risk;
@@ -72,7 +73,7 @@ router.get(
     const lim = Math.min(Number(limit) || 50, 500);
     const [items, total] = await Promise.all([
       Case.find(f)
-        .select('-log -visits -feasibility -baseline -outcome6 -outcome12')
+        .select('-log -visits -feasibility -baseline -outcome6 -outcome12 -documents')
         .populate('mauze', 'name')
         .populate('counsellor', 'name')
         .sort('-updatedAt')
@@ -102,7 +103,7 @@ router.get(
   ah(async (req, res) => {
     const c = await Case.findById(req.params.id).populate(POP);
     if (!canAccessDoc(req.user, c)) return res.status(404).json({ message: 'Case not found' });
-    const history = await Case.find({ household: c.household._id, _id: { $ne: c._id } }).select('caseNo scheme stage finalStatus amountSanctioned createdAt');
+    const history = await Case.find({ household: c.household._id, _id: { $ne: c._id } }).select('caseNo caseType scheme stage finalStatus amountSanctioned createdAt');
     audit(req, 'view', 'Case', c._id, c.caseNo);
     res.json({ ...present(c), history });
   })
@@ -113,7 +114,11 @@ const PLAN_FIELDS = [
   'beneficiaryName',
   'beneficiaryMobile',
   'segment',
+  'caseType',
   'scheme',
+  'housing',
+  'education',
+  'businessDetail',
   'need',
   'interventions',
   'planDetails',
@@ -137,8 +142,9 @@ router.post(
     const h = await Household.findById(req.body.household);
     if (!canAccessDoc(req.user, h)) return res.status(400).json({ message: 'Select a household in your scope' });
     const data = pick(req.body, PLAN_FIELDS);
-    if (!data.scheme) return res.status(400).json({ message: 'Select a scheme' });
-    const seq = await nextSeq(`case-${data.scheme}`);
+    if (!CASE_TYPES[data.caseType]) return res.status(400).json({ message: 'Choose the case type: Housing, Education or Business' });
+    if (!data.scheme) data.scheme = TYPE_SCHEMES[data.caseType][0];
+    const seq = await nextSeq(`case-${data.caseType}`);
     const yy = String(new Date().getFullYear()).slice(-2);
     const prev = await Case.find({ household: h._id }).select('_id');
     const c = new Case({
@@ -148,7 +154,7 @@ router.post(
       household: h._id,
       mauze: h.mauze,
       zone: h.zone,
-      caseNo: `${data.scheme}-${yy}-${String(seq).padStart(4, '0')}`,
+      caseNo: `${CASE_PREFIX[data.caseType]}-${yy}-${String(seq).padStart(4, '0')}`,
       previousCases: prev.map((p) => p._id),
       createdBy: req.user._id,
       baseline: {
@@ -179,6 +185,11 @@ router.put(
     const data = pick(req.body, PLAN_FIELDS);
     if (data.termsExplained && !c.termsExplained) c.termsExplainedAt = new Date();
     if (data.baseline) data.baseline = { ...(c.baseline?.toObject?.() || c.baseline || {}), ...data.baseline };
+    ['housing', 'education', 'businessDetail'].forEach((k) => {
+      if (data[k]) data[k] = { ...(c[k]?.toObject?.() || c[k] || {}), ...data[k] };
+    });
+    if (data.caseType && !CASE_TYPES[data.caseType]) delete data.caseType;
+    if (data.housing?.completionStatus === 'completed' && !data.housing.completedAt) data.housing.completedAt = new Date();
     Object.assign(c, data);
     if (c.need && c.interventions?.length) advance(c, 'planned');
     await saveAndSend(c, req, res, 'Plan updated');
@@ -357,6 +368,7 @@ const SUBS = {
   alerts: { fields: ['level', 'reason', 'action', 'mentor', 'reviewDate', 'referredToCommittee', 'resolved', 'resolution'], label: 'Early-warning alert' },
   repayments: { fields: ['no', 'dueDate', 'amount', 'paidAmount', 'paidDate', 'reference', 'note'], label: 'Installment', roles: SANCTION_ROLES },
   disbursements: { fields: ['amount', 'date', 'mode', 'reference', 'note'], label: 'Disbursement', roles: SANCTION_ROLES, noCreate: true },
+  documents: { fields: ['title', 'category', 'url', 'fileName', 'note'], label: 'Document' },
 };
 
 function afterSub(c, key, item) {
@@ -375,7 +387,8 @@ router.post(
     if (cfg.roles && !cfg.roles.includes(req.user.role)) return res.status(403).json({ message: 'Not permitted' });
     const c = await load(req, res);
     if (!c) return;
-    const data = { ...pick(req.body, cfg.fields), by: req.user._id };
+    const data = { ...pick(req.body, cfg.fields), by: req.user._id, byName: req.user.name };
+    if (req.params.sub === 'documents' && !/^\/api\/files\/[a-f0-9]{24}$/.test(String(data.url || ''))) return res.status(400).json({ message: 'Upload the file first' });
     if (req.params.sub === 'monthlyUpdates') {
       if (!data.month) return res.status(400).json({ message: 'Month is required' });
       const existing = c.monthlyUpdates.find((u) => u.month === data.month);
@@ -437,6 +450,25 @@ router.post(
     if (req.body.remarks) u.remarks = req.body.remarks;
     advance(c, 'monitoring');
     await saveAndSend(c, req, res, `Utilization ${u.approvedPurpose ? 'verified' : 'flagged as diverted'} (₹${u.amount})`);
+  })
+);
+
+// ------------------------------------------------------------------ MPI Upliftment Case Profile
+router.put(
+  '/:id/mpi',
+  ah(async (req, res) => {
+    const c = await load(req, res);
+    if (!c) return;
+    const body = req.body || {};
+    const prev = c.mpi?.toObject?.() || {};
+    const next = { ...prev };
+    ['jamiat', 'researcher', 'profileDate', 'researcherRemarks', 'dimensions', 'deprivationSummary', 'sdgs', 'objectives', 'indicators', 'experts', 'actionPlan', 'budget', 'consents', 'journal'].forEach((k) => {
+      if (body[k] !== undefined) next[k] = body[k];
+    });
+    if (Array.isArray(next.journal)) next.journal = next.journal.map((j) => ({ ...j, byName: j.byName || req.user.name }));
+    next.updatedBy = req.user._id;
+    c.mpi = next;
+    await saveAndSend(c, req, res, 'MPI case profile updated');
   })
 );
 

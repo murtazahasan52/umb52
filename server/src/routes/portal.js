@@ -14,7 +14,10 @@ function view(c) {
   return {
     _id: c._id,
     caseNo: c.caseNo,
+    caseType: c.caseType,
     scheme: c.scheme,
+    housing: c.housing,
+    education: c.education,
     stage: c.stage,
     finalStatus: c.finalStatus,
     mauze: c.mauze?.name,

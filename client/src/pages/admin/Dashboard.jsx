@@ -5,6 +5,7 @@ import { api } from '../../api';
 import { useAuth, canSanction } from '../../auth';
 import { useLoad, Loading, ErrorBox, Meter, RiskBadge, useToast } from '../../ui';
 import { inr, inrShort, num, date, monthLabel, STAGES, STAGE_ORDER } from '../../lib';
+import { TYPE_ICONS } from '../../components/TypeDetails';
 import ScopeFilter, { scopeQuery } from './ScopeFilter';
 
 export default function Dashboard() {
@@ -68,14 +69,35 @@ function Body({ d }) {
           <span>Need corrective action</span>
           <strong className="tx-medium">{d.risk.medium}</strong>
         </Link>
-        <Link to="/admin/inbox" className="strip-link">
-          <span>New requests</span>
-          <strong>{t.newEnquiries}</strong>
+        <Link to="/admin/forms?status=submitted" className="strip-link">
+          <span>Family forms to review</span>
+          <strong>{t.formsToReview ?? 0}</strong>
         </Link>
         <Link to="/admin/inbox?tab=grievances" className="strip-link">
           <span>Open concerns</span>
           <strong>{t.openGrievances}</strong>
         </Link>
+      </div>
+
+      <div className="type-cards">
+        {d.types.map((x) => (
+          <Link key={x.type} to={`/admin/cases?caseType=${x.type}`} className={`type-card tc-${x.type}`}>
+            {TYPE_ICONS[x.type]}
+            <div>
+              <h2>{x.name}</h2>
+              <p className="tc-main">
+                <strong>{x.active}</strong> active of {x.cases} cases
+              </p>
+              <p className="small">
+                {x.extra.label}: <strong>{x.extra.value}</strong>
+              </p>
+              <p className="small muted">
+                Disbursed {inrShort(x.disbursed)}
+                {x.high + x.medium > 0 ? `. ${x.high + x.medium} need attention` : ''}
+              </p>
+            </div>
+          </Link>
+        ))}
       </div>
 
       <section className="panel">
@@ -227,8 +249,8 @@ function Body({ d }) {
               <YAxis tickFormatter={inrShort} tick={{ fontSize: 12 }} width={64} />
               <Tooltip formatter={(v) => inr(v)} labelFormatter={monthLabel} />
               <Legend />
-              <Bar dataKey="disbursed" name="Disbursed" fill="#0F6B4F" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="verified" name="Verified use" fill="#7BAE95" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="disbursed" name="Disbursed" fill="#003399" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="verified" name="Verified use" fill="#8FA6D9" radius={[3, 3, 0, 0]} />
               <Bar dataKey="repaid" name="Repaid" fill="#A9822E" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>

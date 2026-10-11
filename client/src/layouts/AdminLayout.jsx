@@ -1,17 +1,23 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, canManage } from '../auth';
 import { ROLES } from '../lib';
 import { Mark } from './PublicLayout';
+import GlobalSearch from '../components/GlobalSearch';
 
 const NAV = [
   { to: '/admin', label: 'Dashboard', end: true },
+  { to: '/admin/register', label: 'Register a case' },
+  { to: '/admin/forms', label: 'Family forms' },
   { to: '/admin/warnings', label: 'Early warnings' },
   { to: '/admin/cases', label: 'Beneficiary cases' },
   { to: '/admin/households', label: 'Household survey' },
+  { to: '/admin/fostership', label: 'Fostership' },
+  { to: '/admin/directory', label: 'Directory' },
   { to: '/admin/inbox', label: 'Requests & concerns' },
   { to: '/admin/mauzes', label: 'Mauzes & zones' },
   { to: '/admin/users', label: 'Team & logins', manage: true },
+  { to: '/admin/import', label: 'Import from Excel', hq: true },
   { to: '/admin/reports', label: 'Reports & exports', manage: true },
 ];
 
@@ -37,7 +43,7 @@ export default function AdminLayout() {
           <small>{ROLES[user.role]}</small>
         </div>
         <nav className="side-nav">
-          {NAV.filter((n) => !n.manage || canManage(user)).map((n) => (
+          {NAV.filter((n) => (!n.manage || canManage(user)) && (!n.hq || user.role === 'hq')).map((n) => (
             <NavLink key={n.to} to={n.to} end={n.end}>
               {n.label}
             </NavLink>
@@ -62,7 +68,10 @@ export default function AdminLayout() {
           <button className="menu-btn dark" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
             Menu
           </button>
-          <span className="top-scope">{scope}</span>
+          <GlobalSearch />
+          <Link to="/admin/register" className="btn sm top-register">
+            Register a case
+          </Link>
         </header>
         <main id="admin-main" className="admin-main">
           <Outlet />

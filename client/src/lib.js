@@ -151,3 +151,59 @@ export function setPath(obj, path, value) {
   return out;
 }
 export const getPath = (obj, path) => path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
+
+// ---------------- Case types (every upliftment case is one of these)
+export const CASE_TYPES = { housing: 'Housing', education: 'Education', business: 'Business' };
+export const TYPE_SCHEMES = { housing: ['QH', 'WELFARE'], education: ['WELFARE', 'QH', 'SKILL'], business: ['QH', 'TR', 'SKILL'] };
+export const HOUSING_PURPOSE = { purchase: 'Purchase', construction: 'Construction', repair: 'Repair / renovation', rent_deposit: 'Rent deposit', other: 'Other' };
+export const EDU_LEVEL = { school: 'School', junior_college: 'Junior college', graduation: 'Graduation', post_graduation: 'Post graduation', professional: 'Professional course', vocational: 'Vocational / skill', other: 'Other' };
+export const STUDY_STATUS = { studying: 'Studying', completed: 'Completed', dropped: 'Dropped out' };
+export const BUSINESS_PURPOSE = { new_business: 'Start a new business', expansion: 'Expand business', working_capital: 'Working capital / stock', equipment: 'Machinery / equipment', formalization: 'Formalization (GST, Udyam)', other: 'Other' };
+export const COMPLETION = { not_started: 'Not started', in_progress: 'In progress', completed: 'Completed' };
+
+// ---------------- MPI Upliftment Case Profile (Marafiq Burhaniyah format)
+export const MPI_DIMENSIONS = [
+  ['deeni', 'Deeni'],
+  ['livelihood', 'Livelihood'],
+  ['health', 'Health'],
+  ['nutrition', 'Nutrition'],
+  ['education', 'Education'],
+  ['standardOfLiving', 'Standard of living'],
+];
+export const MPI_INDICATORS = [
+  ['deeni', 'Deeni', 'Kalemat-al-Shahadat'],
+  ['deeni', 'Deeni', 'Dai-al-Zamaan (TUS) name'],
+  ['deeni', 'Deeni', 'Dai-al-Zamaan (TUS) misaaq'],
+  ['deeni', 'Deeni', 'Sila Fitra & Wajebaat'],
+  ['deeni', 'Deeni', 'Ashara Mubarakah attendance'],
+  ['deeni', 'Deeni', 'Raudat Tahera Ziyarat'],
+  ['livelihood', 'Livelihood', 'Income'],
+  ['health', 'Health & Nutrition', 'Nutrition'],
+  ['health', 'Health & Nutrition', 'Child mortality'],
+  ['education', 'Education', 'Years of schooling'],
+  ['education', 'Education', 'School attendance'],
+  ['standardOfLiving', 'Standard of living', 'Cooking fuel'],
+  ['standardOfLiving', 'Standard of living', 'Sanitation'],
+  ['standardOfLiving', 'Standard of living', 'Drinking water'],
+  ['standardOfLiving', 'Standard of living', 'Electricity'],
+  ['standardOfLiving', 'Standard of living', 'Housing'],
+  ['standardOfLiving', 'Standard of living', 'Assets'],
+].map(([dim, group, indicator]) => ({ key: `${dim}:${indicator}`, dimension: dim, group, indicator }));
+export const UMOOR = ['Deeni', 'Standard of living', 'Nutrition', 'Livelihood', 'Education', 'Health'];
+export const CHECKLIST = [
+  ['Profiling', '1.1', 'family_profile', 'Family profile (system generated)', 'auto'],
+  ['Profiling', '1.2', 'survey_details', 'Survey details (system generated)', 'auto'],
+  ['Profiling', '1.3', 'case_profile', 'Case profile', 'auto'],
+  ['Profiling', '1.4', 'mpi_survey', 'MPI survey report', 'auto'],
+  ['Profiling', '1.5', 'photo_report', 'Photo report', 'upload'],
+  ['Investigation', '2.1', 'mpi_analysis', 'MPI analysis', 'auto'],
+  ['Investigation', '2.2', 'deprivation_investigation', 'Deprivation investigation', 'auto'],
+  ['Investigation', '2.3', 'expert_advice', 'Expert advice / consultation', 'auto'],
+  ['Investigation', '2.4', 'consultant_letter', 'Consultant letterhead', 'upload'],
+  ['Action plan', '3.1', 'action_plan', 'Proposed action plan', 'auto'],
+  ['Action plan', '3.2', 'budget_sheet', 'Budget sheet', 'auto'],
+  ['Action plan', '3.3', 'quotation', 'Quotations', 'upload'],
+  ['Attachments', '4.1', 'araz', 'Araz to Al-Vazarat al-Saifiyah', 'upload'],
+  ['Attachments', '4.2', 'consent_form', 'Consent forms', 'auto'],
+  ['Attachments', '4.3', 'journal_log', 'Daily journal log', 'auto'],
+];

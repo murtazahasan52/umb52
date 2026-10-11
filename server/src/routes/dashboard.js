@@ -6,9 +6,10 @@ const Household = require('../models/Household');
 const Mauze = require('../models/Mauze');
 const Grievance = require('../models/Grievance');
 const Enquiry = require('../models/Enquiry');
+const FormRequest = require('../models/FormRequest');
 const AuditLog = require('../models/AuditLog');
 const { requireAuth, allow, scopeFilter } = require('../middleware/auth');
-const { ROLES, STAFF_ROLES, BUSINESS_SCHEMES, SCHEMES } = require('../config/constants');
+const { ROLES, STAFF_ROLES, BUSINESS_SCHEMES, SCHEMES, CASE_TYPES } = require('../config/constants');
 const { ah, sum, pct, quarterStart, monthKey } = require('../utils/helpers');
 const { financials, improvement, evaluateCase, freshen } = require('../utils/warnings');
 
@@ -31,8 +32,9 @@ router.get(
     if (scope.zone) mauzeFilter.zone = scope.zone;
     if (scope.mauze) mauzeFilter._id = scope.mauze;
 
-    const [cases, mauzes, hhAgg, grievances, newEnquiries] = await Promise.all([
-      Case.find(scope).select('-log').populate('mauze', 'name').populate('counsellor', 'name'),
+    const caseFilter = req.query.caseType && CASE_TYPES[req.query.caseType] ? { ...scope, caseType: req.query.caseType } : scope;
+    const [cases, mauzes, hhAgg, grievances, newEnquiries, formsToReview] = await Promise.all([
+      Case.find(caseFilter).select('-log').populate('mauze', 'name').populate('counsellor', 'name'),
       Mauze.find({ ...mauzeFilter, active: true }).select('name totalHouseholds zone').lean(),
       Household.aggregate([
         { $match: scope },
@@ -47,6 +49,7 @@ router.get(
       ]),
       Grievance.find(scope).select('status createdAt resolvedAt slaDays eligible').lean(),
       Enquiry.countDocuments({ ...scope, status: 'new' }),
+      FormRequest.countDocuments({ ...scope, status: 'submitted' }),
     ]);
 
     await freshen(cases, Case);
@@ -159,6 +162,32 @@ router.get(
       };
     });
 
+    // The three case types: Housing, Education, Business
+    const types = Object.keys(CASE_TYPES).map((t) => {
+      const list = cases.filter((c) => (c.caseType || 'business') === t);
+      const f = list.map((c) => financials(c));
+      const im = list.map((c) => improvement(c)).filter((i) => i.hasData);
+      const extra =
+        t === 'housing'
+          ? { label: 'Homes completed', value: list.filter((c) => c.housing?.completionStatus === 'completed').length }
+          : t === 'education'
+          ? { label: 'Students studying / completed', value: `${list.filter((c) => c.education?.studyStatus === 'studying').length} / ${list.filter((c) => c.education?.studyStatus === 'completed').length}` }
+          : { label: 'Businesses better than baseline', value: `${im.filter((i) => i.improved).length} of ${im.length}` };
+      return {
+        type: t,
+        name: CASE_TYPES[t],
+        cases: list.length,
+        active: list.filter((c) => c.stage !== 'closed').length,
+        sanctioned: sum(f, (x) => x.sanctioned),
+        disbursed: sum(f, (x) => x.disbursed),
+        verified: sum(f, (x) => x.verified),
+        achieved: list.filter((c) => c.finalStatus === 'achieved').length,
+        high: list.filter((c) => c.risk === 'high' && c.stage !== 'closed').length,
+        medium: list.filter((c) => c.risk === 'medium' && c.stage !== 'closed').length,
+        extra,
+      };
+    });
+
     const risk = {
       high: active.filter((c) => c.risk === 'high').length,
       medium: active.filter((c) => c.risk === 'medium').length,
@@ -208,6 +237,7 @@ router.get(
         _id: c._id,
         caseNo: c.caseNo,
         beneficiaryName: c.beneficiaryName,
+        caseType: c.caseType,
         scheme: c.scheme,
         mauze: c.mauze?.name,
         counsellor: c.counsellor?.name,
@@ -275,11 +305,13 @@ router.get(
         cases: cases.length,
         active: active.length,
         newEnquiries,
+        formsToReview,
         openGrievances: grievances.filter((g) => ['open', 'in_progress'].includes(g.status)).length,
         successStories: cases.filter((c) => c.successStory).length,
       },
       kpis,
       money,
+      types,
       schemes,
       risk,
       stages,
@@ -339,6 +371,7 @@ router.get(
         CaseNo: c.caseNo,
         Beneficiary: c.beneficiaryName,
         Mauze: c.mauze?.name,
+        CaseType: CASE_TYPES[c.caseType] || '',
         Scheme: SCHEMES[c.scheme],
         Stage: c.stage,
         FinalStatus: c.finalStatus,

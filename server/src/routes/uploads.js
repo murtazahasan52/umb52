@@ -25,12 +25,12 @@ const upload = multer({
 
 const bucket = () => new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: 'evidence' });
 
-function save(file, userId) {
+function save(file, userId, extra = {}) {
   return new Promise((resolve, reject) => {
     const ext = path.extname(file.originalname).toLowerCase();
     const name = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`;
     const stream = bucket().openUploadStream(name, {
-      metadata: { contentType: TYPES[ext], originalName: file.originalname.slice(0, 120), uploadedBy: userId },
+      metadata: { contentType: TYPES[ext], originalName: file.originalname.slice(0, 120), uploadedBy: userId, ...extra },
     });
     stream.on('error', reject);
     stream.on('finish', () => resolve(`/api/files/${stream.id}`));
@@ -69,4 +69,4 @@ fileRouter.get('/:id', async (req, res) => {
   bucket().openDownloadStream(id).on('error', () => res.status(404).end()).pipe(res);
 });
 
-module.exports = { uploadRouter, fileRouter };
+module.exports = { uploadRouter, fileRouter, upload, save };

@@ -1,17 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth, isStaff } from '../auth';
-import { useEffect } from 'react';
 
-export function Mark({ size = 30 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 512 512" aria-hidden="true">
-      <rect width="512" height="512" rx="112" fill="#0F6B4F" />
-      <path d="M136 400V244c0-70 54-128 120-160 66 32 120 90 120 160v156" fill="none" stroke="#F6F8F6" strokeWidth="34" strokeLinejoin="round" />
-      <path d="M196 400v-86h120v86" fill="none" stroke="#A9822E" strokeWidth="30" strokeLinejoin="round" />
-      <path d="M206 262l36 34 66-70" fill="none" stroke="#F6F8F6" strokeWidth="30" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+// Upliftment Department logo (from the department's case-file letterhead)
+export function Mark({ size = 30, variant = 'blue' }) {
+  return <img src={`/brand/logo-${variant}.png`} alt="" width={Math.round(size * 0.87)} height={size} className="brand-logo" />;
 }
 
 export default function PublicLayout() {
@@ -20,8 +13,8 @@ export default function PublicLayout() {
   const loc = useLocation();
   useEffect(() => {
     setOpen(false);
-    window.scrollTo(0, 0);
-  }, [loc.pathname]);
+    if (!loc.hash) window.scrollTo(0, 0);
+  }, [loc.pathname, loc.hash]);
   const home = user ? (isStaff(user) ? '/admin' : '/app') : '/login';
   return (
     <div className="public">
@@ -31,18 +24,20 @@ export default function PublicLayout() {
       <header className="pub-head">
         <div className="pub-wrap pub-head-row">
           <Link to="/" className="brand">
-            <Mark />
+            <Mark size={44} />
             <span>
-              <strong>Upliftment Register</strong>
-              <small>Tijaarat Raabehah &amp; Qardan Hasana</small>
+              <strong>Upliftment Department</strong>
+              <small lang="ar" dir="rtl">
+                رفع مستوى معيشة المؤمنين
+              </small>
             </span>
           </Link>
           <button className="menu-btn" aria-expanded={open} aria-controls="pub-nav" onClick={() => setOpen((o) => !o)}>
             Menu
           </button>
           <nav id="pub-nav" className={`pub-nav ${open ? 'open' : ''}`}>
-            <NavLink to="/framework">How it works</NavLink>
-            <NavLink to="/request-support">Request support</NavLink>
+            <a href="/#areas">What we help with</a>
+            <a href="/#steps">How to get help</a>
             <NavLink to="/grievance">Raise a concern</NavLink>
             <Link to={home} className="btn sm">
               {user ? 'Open my account' : 'Log in'}
@@ -54,21 +49,16 @@ export default function PublicLayout() {
         <Outlet />
       </main>
       <footer className="pub-foot">
-        <div className="pub-wrap foot-grid">
-          <div>
-            <p className="foot-title">Upliftment Register</p>
-            <p>A monitoring system for Mauze committees, Zonal Business Councils and HQ departments, so that every deserving family receives the right support and its progress is followed with care.</p>
+        <div className="pub-wrap foot-row">
+          <div className="foot-logos">
+            <img src="/brand/logo-blue.png" alt="Upliftment Department" height="64" />
           </div>
-          <div>
-            <p className="foot-title">For families</p>
+          <nav className="foot-links" aria-label="Footer">
             <Link to="/request-support">Request support</Link>
             <Link to="/grievance">Raise or track a concern</Link>
-            <Link to="/login">Family app login</Link>
-          </div>
-          <div>
-            <p className="foot-title">Confidentiality</p>
-            <p>Family information is shared only with authorised committee members. Sanction authority and financial controls remain as set by HQ and scheme policy.</p>
-          </div>
+            <Link to="/login">Family app and committee login</Link>
+          </nav>
+          <p className="foot-note">Family details are kept confidential and shared only with authorised members of the Mauze committee and the department.</p>
         </div>
       </footer>
     </div>

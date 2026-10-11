@@ -1,7 +1,8 @@
 const { Schema, model } = require('mongoose');
-const { SCHEMES, STAGES, FINAL_STATUS, INTERVENTIONS, TRAINING_CATEGORIES, RISK } = require('../config/constants');
+const { CASE_TYPES, SCHEMES, STAGES, FINAL_STATUS, INTERVENTIONS, TRAINING_CATEGORIES, RISK } = require('../config/constants');
 
 const ObjectId = Schema.Types.ObjectId;
+const DocumentSchema = require('./DocumentSchema');
 
 // ---- Sub-documents -------------------------------------------------------
 
@@ -175,6 +176,112 @@ const LogSchema = new Schema(
   { _id: false }
 );
 
+// ---- Type-specific details
+const HousingSchema = new Schema(
+  {
+    purpose: { type: String, enum: ['purchase', 'construction', 'repair', 'rent_deposit', 'other', ''], default: '' },
+    currentHousing: { type: String, enum: ['owned', 'rented', 'family', 'other', ''], default: '' },
+    propertyAddress: String,
+    propertyDetails: String, // size, rooms, condition
+    estimatedCost: Number,
+    ownContribution: Number,
+    completionStatus: { type: String, enum: ['not_started', 'in_progress', 'completed', ''], default: '' },
+    completedAt: Date,
+  },
+  { _id: false }
+);
+const EducationSchema = new Schema(
+  {
+    studentName: String,
+    relation: String,
+    age: Number,
+    level: { type: String, enum: ['school', 'junior_college', 'graduation', 'post_graduation', 'professional', 'vocational', 'other', ''], default: '' },
+    course: String, // class / degree / course name
+    institution: String,
+    academicYear: String,
+    annualFees: Number,
+    otherCosts: Number,
+    familyContribution: Number,
+    lastResult: String,
+    studyStatus: { type: String, enum: ['studying', 'completed', 'dropped', ''], default: '' },
+  },
+  { _id: false }
+);
+const BusinessDetailSchema = new Schema(
+  {
+    businessName: String,
+    businessType: String,
+    purpose: { type: String, enum: ['new_business', 'expansion', 'working_capital', 'equipment', 'formalization', 'other', ''], default: '' },
+    estimatedCost: Number,
+    ownContribution: Number,
+  },
+  { _id: false }
+);
+
+// ---- MPI Upliftment Case Profile (Marafiq Burhaniyah format)
+const PersonSign = new Schema({ name: String, date: Date, signed: { type: Boolean, default: false } }, { _id: false });
+const MpiSchema = new Schema(
+  {
+    jamiat: String,
+    researcher: { itsNo: String, name: String, mobile: String },
+    profileDate: Date,
+    researcherRemarks: String,
+    dimensions: {
+      deeni: { type: String, enum: ['deprived', 'not_deprived', ''], default: '' },
+      livelihood: { type: String, enum: ['deprived', 'not_deprived', ''], default: '' },
+      health: { type: String, enum: ['deprived', 'not_deprived', ''], default: '' },
+      nutrition: { type: String, enum: ['deprived', 'not_deprived', ''], default: '' },
+      education: { type: String, enum: ['deprived', 'not_deprived', ''], default: '' },
+      standardOfLiving: { type: String, enum: ['deprived', 'not_deprived', ''], default: '' },
+    },
+    deprivationSummary: String,
+    sdgs: String,
+    objectives: String,
+    // Deprivation investigation — one row per indicator
+    indicators: [
+      new Schema(
+        { key: String, dimension: String, indicator: String, applicable: { type: Boolean, default: false }, investigation: String },
+        { _id: false }
+      ),
+    ],
+    experts: [
+      new Schema({
+        type: { type: String, enum: ['local', 'idara'], default: 'local' },
+        name: String,
+        itsNo: String,
+        mobile: String,
+        expertise: String,
+        dimension: String,
+        indicator: String,
+        solution: String,
+      }),
+    ],
+    actionPlan: [new Schema({ indicator: String, plan: String, responsible: String, timeRequired: String, status: { type: String, enum: ['pending', 'in_progress', 'done', ''], default: 'pending' } })],
+    budget: [
+      new Schema(
+        {
+          umoor: String,
+          potential: Boolean,
+          willingness: Boolean,
+          scope: String,
+          hrCount: Number,
+          skills: String,
+          timeFrame: String,
+          own: Number,
+          other: Number,
+          qardanHasana: Number,
+          enayat: Number,
+        },
+        { _id: false }
+      ),
+    ],
+    consents: { aamil: PersonSign, jamaatSecretary: PersonSign, marafiqMember: PersonSign },
+    journal: [new Schema({ date: { type: Date, default: Date.now }, note: String, byName: String })],
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  },
+  { _id: false }
+);
+
 // ---- Main beneficiary-level record --------------------------------------
 
 const CaseSchema = new Schema(
@@ -189,7 +296,11 @@ const CaseSchema = new Schema(
     beneficiaryUser: { type: ObjectId, ref: 'User' },
     segment: { type: String, enum: ['', 'micro_business', 'existing_business', 'youth', 'woman_entrepreneur', 'agriculture', 'industrial', 'welfare'], default: '' },
 
+    caseType: { type: String, enum: Object.keys(CASE_TYPES), default: 'business', index: true },
     scheme: { type: String, enum: Object.keys(SCHEMES), required: true },
+    housing: { type: HousingSchema, default: undefined },
+    education: { type: EducationSchema, default: undefined },
+    businessDetail: { type: BusinessDetailSchema, default: undefined },
 
     // Checkpoint 2 — individual upliftment plan
     need: String,
@@ -232,6 +343,8 @@ const CaseSchema = new Schema(
     visits: [VisitSchema],
     trainings: [TrainingSchema],
     alerts: [AlertSchema],
+    documents: [DocumentSchema],
+    mpi: { type: MpiSchema, default: undefined },
 
     outcome6: { type: OutcomeSchema, default: undefined },
     outcome12: { type: OutcomeSchema, default: undefined },
